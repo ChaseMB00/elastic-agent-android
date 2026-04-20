@@ -510,9 +510,20 @@ public class FleetCheckinRepository {
             return null;
         }
 
-        if(output.getApiKey() == null || output.getHosts() == null || output.getSslCaTrustedFingerprint() == null){
+        if (output.getApiKey() == null || output.getHosts() == null || output.getHosts().isEmpty()) {
             AppLog.e(TAG_PARSE, "Output data is incomplete.");
             return null;
+        }
+
+        List<String> sslCertificateAuthorities = output.getSslCertificateAuthorities();
+        boolean hasFingerprint = output.getSslCaTrustedFingerprint() != null && !output.getSslCaTrustedFingerprint().trim().isEmpty();
+        boolean hasCertificateAuthorities = sslCertificateAuthorities != null && !sslCertificateAuthorities.isEmpty();
+        if (!hasFingerprint && !hasCertificateAuthorities) {
+            AppLog.w(TAG_PARSE, "Output has no TLS trust metadata (ssl.ca_trusted_fingerprint / ssl.certificate_authorities). Continuing with system trust.");
+            writeDialog("Policy has no TLS trust metadata. Continuing with system trust.", true);
+        } else if (!hasFingerprint) {
+            AppLog.w(TAG_PARSE, "Output has no ssl.ca_trusted_fingerprint. Continuing with ssl.certificate_authorities.");
+            writeDialog("Policy has no SSL fingerprint. Continuing with certificate authorities.", true);
         }
 
         // Save the Elastic API key only encrypted in the secure preferences
@@ -521,7 +532,7 @@ public class FleetCheckinRepository {
 
         policyData.hosts = String.join(",", output.getHosts()); // Concatenate hosts
         policyData.sslCaTrustedFingerprint = output.getSslCaTrustedFingerprint();
-        policyData.sslCaTrustedFull = output.getSslCertificateAuthorities().stream().findFirst().orElse(null);
+        policyData.sslCaTrustedFull = hasCertificateAuthorities ? sslCertificateAuthorities.stream().findFirst().orElse(null) : null;
 
 
         if(action.getId() == null){
